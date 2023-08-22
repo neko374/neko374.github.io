@@ -2,166 +2,107 @@
   <div class="page">
     <Header></Header>
     <div class="down">
-      <div class="inp">
-        模型号：<el-input
-          style="width: 200px"
-          size="small"
-          v-model="name"
-        ></el-input>
-        模型名：<el-input
-          style="width: 200px"
-          size="small"
-          v-model="number"
-        ></el-input>
-        <el-button
-          type="primary"
-          style="margin-left: 10px; width: 80px"
-          size="small"
-        >
-          查询
-        </el-button>
-      </div>
-      <div style="padding: 20px 0 20px 20px">
-        <span style="margin-right: 15px; cursor: pointer" @click="add">
-          <el-icon color="black"><CirclePlus /></el-icon> 添加
-        </span>
-        <span style="margin-right: 15px; cursor: pointer" @click="del"
-          ><el-icon color="black"><Delete /></el-icon> 删除</span
-        >
-      </div>
       <el-table
-        :data="dataList"
+        :data="pdfList"
         size="small"
         stripe
         height="80%"
-        v-loading="loading"
+        style="width: 100%"
       >
-        <el-table-column
-          align="center"
-          type="selection"
-          header-align="center"
-          width="50"
-        >
-        </el-table-column>
-        <el-table-column
-          align="center"
-          prop="number"
-          show-overflow-tooltip
-          label="模型编号"
-          width="200"
-        >
-        </el-table-column>
         <el-table-column
           align="center"
           prop="name"
           show-overflow-tooltip
-          label="模型名称"
+          label="文件"
         >
         </el-table-column>
-        <el-table-column
-          align="center"
-          prop="equClassifyName"
-          show-overflow-tooltip
-          label="所属设备"
-        >
-        </el-table-column>
-        <el-table-column
-          align="center"
-          prop="majorName"
-          show-overflow-tooltip
-          label="专业"
-        >
-        </el-table-column>
-        <el-table-column
-          header-align="center"
-          align="center"
-          fixed="right"
-          width="150"
-          label="操作"
-        >
-          <template v-slot="scope">
-            <span
-              style="color: #1791ff; cursor: pointer"
-              @click="edit(scope.row)"
-              >编辑</span
-            >
+        <el-table-column label="操作">
+          <template #default="scope">
+            <a @click="viewPDF(scope.row.name)">查看</a>
+            <a @click="downloadPDF(scope.row.name)">下载</a>
           </template>
         </el-table-column>
       </el-table>
+      <div ref="pdfContainer" class="pdf-container" v-if="showPDF">
+        <div class="pdf-toolbar">
+          <button @click="closePDF">关闭</button>
+        </div>
+        <div ref="pdfViewer"></div>
+      </div>
     </div>
-    <!-- 新增弹框 -->
-    <el-dialog
-      title="模型库"
-      close-on-press-escape
-      v-model="show1"
-      width="30%"
-      style="height: 80%"
-    >
-      <el-form>
-        <el-form-item style="display: block">
-          <div style="width: 16%; display: inline-block">模型名称：</div>
-          <el-select style="width: 80%" v-model="addmodel.name">
-            <el-option value="1"></el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item style="display: block">
-          <div style="width: 16%; display: inline-block">设备分类id：</div>
-          <el-select style="width: 80%" v-model="addmodel.equClassifyId">
-            <el-option value="1"></el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item style="display: block">
-          <div style="width: 16%; display: inline-block">专业id：</div>
-          <el-select style="width: 80%" v-model="addmodel.majorId">
-            <el-option value="1"></el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item style="display: block">
-          <div style="width: 16%; display: inline-block">行业id：</div>
-          <el-input style="width: 80%" v-model="addmodel.tradeId"></el-input>
-        </el-form-item>
-        <el-form-item style="display: block">
-          <el-button
-            type="primary"
-            style="float: right; margin: 20px; width: 100px"
-          >
-            {{ this.ok }}
-          </el-button>
-        </el-form-item>
-      </el-form>
-    </el-dialog>
   </div>
 </template>
 
-<script setup>
+<script>
 import { ref } from "vue";
-import Header from "../../components/header/header.vue";
-var dataList = ref([
-  {
-    number: "1",
-    name: "1",
-    equClassifyName: "1",
-    majorName: "1",
+import pdfjs from "pdfjs-dist";
+function getPdfPath(fileName) {
+  return `/pdf/${fileName}`;
+}
+export default {
+  setup() {
+    const pdfList = ref([{ name: "老早有些梳头娘也会给人绞脸.pdf" }]);
+    const pdfContainer = ref(null);
+    const pdfViewer = ref(null);
+    const showPDF = ref(false);
+    const viewPDF = async (fileName) => {
+      const pdfPath = getPdfPath(fileName);
+      const loadingTask = pdfjs.getDocument(pdfPath);
+      try {
+        const pdf = await loadingTask.promise;
+        renderPDF(pdf);
+        showPDF.value = true; // 将显示PDF的操作移到加载完成后
+      } catch (error) {
+        console.error("Error loading PDF:", error);
+      }
+    };
+    const renderPDF = async (pdf) => {
+      const viewer = pdfViewer.value;
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        try {
+          const page = await pdf.getPage(pageNum);
+          const canvas = document.createElement("canvas");
+          const scale = 1.5;
+          const viewport = page.getViewport({ scale });
+          const context = canvas.getContext("2d");
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+          const renderContext = {
+            canvasContext: context,
+            viewport: viewport,
+          };
+          await page.render(renderContext).promise;
+          viewer.appendChild(canvas);
+        } catch (error) {
+          console.error("Error rendering PDF page:", error);
+        }
+      }
+    };
+    const closePDF = () => {
+      showPDF.value = false;
+      while (pdfViewer.value.firstChild) {
+        pdfViewer.value.removeChild(pdfViewer.value.firstChild);
+      }
+    };
+    const downloadPDF = (fileName) => {
+      const pdfPath = getPdfPath(fileName);
+      const link = document.createElement("a");
+      link.href = pdfPath;
+      link.download = fileName;
+      link.target = "_blank";
+      link.click();
+    };
+    return {
+      pdfList,
+      viewPDF,
+      pdfContainer,
+      pdfViewer,
+      showPDF,
+      closePDF,
+      downloadPDF,
+      pdfViewer,
+    };
   },
-]);
-var show1 = ref(false);
-var addmodel = ref({
-  name: "",
-  equClassifyId: "",
-  majorId: "",
-  tradeId: "",
-  id: "",
-});
-var name = ref(""); //搜索
-var number = ref("");
-var ok = ref("添加");
-var pageNo = ref(1);
-var pageSize = ref(10);
-var total = ref(0);
-var dataListSelections = []; //多选
-var loading = ref(false);
-var add = () => {
-  show1.value = true;
 };
 </script>
   
@@ -175,28 +116,5 @@ var add = () => {
 .down {
   width: 100%;
   height: 80%;
-}
-
-.inp {
-  border-bottom: 0.1px solid rgb(218, 213, 213);
-  padding-left: 20px;
-  padding-bottom: 20px;
-  padding-top: 20px;
-}
-
-.codel {
-  float: left;
-  width: 70%;
-  height: 70vh;
-  padding-top: 10px;
-  overflow: hidden;
-  box-sizing: border-box;
-}
-
-.dev {
-  width: 30%;
-  height: 100%;
-  padding: 20px;
-  float: right;
 }
 </style>
